@@ -62,6 +62,33 @@ def load_cookies(session: requests.Session, path: str | None):
     session.headers['Cookie'] = cookie
 
 
+def load_browser_cookies(session: requests.Session, browser: str) -> int:
+    """Read only Bilibili cookies from the current user's local Chrome/Edge profile.
+
+    No cookie values are written to disk or logs. Browser encryption may prevent
+    reading cookies on some Chrome/Edge versions or locked profiles.
+    """
+    if browser not in ('chrome', 'edge'):
+        raise ValueError('Browser must be chrome or edge')
+    try:
+        import browser_cookie3
+    except ImportError as e:
+        raise RuntimeError('Thiếu browser-cookie3. Chạy: pip install -r requirements.txt') from e
+    try:
+        jar = getattr(browser_cookie3, browser)(domain_name='bilibili.tv')
+    except Exception as e:
+        raise RuntimeError(f'Không đọc được cookie {browser}. Thử đóng trình duyệt, chạy cùng tài khoản Windows, hoặc chọn File TXT. ({type(e).__name__})') from e
+    count = 0
+    for cookie in jar:
+        domain = cookie.domain.lstrip('.').lower()
+        if domain == 'bilibili.tv' or domain.endswith('.bilibili.tv'):
+            session.cookies.set(cookie.name, cookie.value, domain=cookie.domain, path=cookie.path, secure=cookie.secure)
+            count += 1
+    if count == 0:
+        raise RuntimeError('Không tìm thấy cookie Bilibili.tv. Hãy đăng nhập Bilibili.tv trên trình duyệt đã chọn.')
+    return count
+
+
 def make_session() -> requests.Session:
     s = requests.Session()
     s.headers.update({'User-Agent': UA, 'Referer': REFERER})

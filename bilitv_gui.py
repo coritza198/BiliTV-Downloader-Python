@@ -27,6 +27,7 @@ class GUI(tk.Tk):
         self.prefix = tk.StringVar(value='tập_')
         self.start_number = tk.StringVar(value='1')
         self.cookies = tk.StringVar()
+        self.cookie_source = tk.StringVar(value="Không dùng")
         self.subtitle = tk.BooleanVar(value=True)
         self.retry = tk.IntVar(value=3)
         self.status = tk.StringVar(value='Sẵn sàng')
@@ -63,12 +64,15 @@ class GUI(tk.Tk):
         self.prefix.trace_add('write', self.update_preview)
         self.start_number.trace_add('write', self.update_preview)
         self.update_preview()
-        ttk.Label(settings, text='Cookies (tùy chọn)').grid(row=3, column=0, sticky='w', pady=4)
-        ttk.Entry(settings, textvariable=self.cookies).grid(row=3, column=1, sticky='ew', padx=8)
-        ttk.Button(settings, text='Chọn...', command=self.pick_cookies).grid(row=3, column=2)
-        ttk.Checkbutton(settings, text='Tải phụ đề nếu có', variable=self.subtitle).grid(row=4, column=0, columnspan=2, sticky='w', pady=5)
-        ttk.Label(settings, text='Số lần thử').grid(row=4, column=2, sticky='w')
-        ttk.Spinbox(settings, from_=1, to=10, textvariable=self.retry, width=4).grid(row=4, column=2, sticky='e')
+        ttk.Label(settings, text='Nguồn cookie').grid(row=3, column=0, sticky='w', pady=4)
+        ttk.Combobox(settings, textvariable=self.cookie_source, values=('Không dùng', 'Chrome', 'Edge', 'File TXT'), state='readonly').grid(row=3, column=1, sticky='ew', padx=8)
+        ttk.Label(settings, text='File cookie (nếu chọn TXT)').grid(row=4, column=0, sticky='w', pady=4)
+        ttk.Entry(settings, textvariable=self.cookies).grid(row=4, column=1, sticky='ew', padx=8)
+        ttk.Button(settings, text='Chọn...', command=self.pick_cookies).grid(row=4, column=2)
+
+        ttk.Checkbutton(settings, text='Tải phụ đề nếu có', variable=self.subtitle).grid(row=5, column=0, columnspan=2, sticky='w', pady=5)
+        ttk.Label(settings, text='Số lần thử').grid(row=5, column=2, sticky='w')
+        ttk.Spinbox(settings, from_=1, to=10, textvariable=self.retry, width=4).grid(row=5, column=2, sticky='e')
 
         bar = ttk.Frame(outer)
         bar.pack(fill='x', pady=(12, 6))
@@ -133,7 +137,10 @@ class GUI(tk.Tk):
             if not ffmpeg:
                 raise ValueError('Không tìm thấy FFmpeg. Hãy cài FFmpeg hoặc đặt ffmpeg.exe cạnh chương trình.')
             output = Path(self.output.get()).expanduser().resolve()
-            cookie = self.cookies.get().strip() or None
+            source = self.cookie_source.get()
+            cookie = (self.cookies.get().strip() or None) if source == 'File TXT' else None
+            if source == 'File TXT' and not cookie:
+                raise ValueError('Hãy chọn file cookie TXT.')
             if cookie and not Path(cookie).is_file():
                 raise ValueError('Không tìm thấy file cookies.')
         except (ValueError, tk.TclError) as e:
@@ -143,7 +150,7 @@ class GUI(tk.Tk):
         self.progress['value'] = 0
         self.start_btn.configure(state='disabled')
         self.stop_btn.configure(state='normal')
-        self.worker = threading.Thread(target=self.download, args=(jobs, output, prefix, start_number, cookie, attempts, self.subtitle.get(), ffmpeg), daemon=True)
+        self.worker = threading.Thread(target=self.download, args=(jobs, output, prefix, start_number, cookie, source, attempts, self.subtitle.get(), ffmpeg), daemon=True)
         self.worker.start()
 
     def stop(self):
@@ -151,12 +158,17 @@ class GUI(tk.Tk):
         self.status.set('Đang chờ video hiện tại hoàn thành...')
         self.stop_btn.configure(state='disabled')
 
-    def download(self, jobs, output, prefix, start_number, cookie, attempts, subtitle, ffmpeg):
+    def download(self, jobs, output, prefix, start_number, cookie, source, attempts, subtitle, ffmpeg):
         stats = {'ok': 0, 'skip': 0, 'fail': 0}
         try:
             output.mkdir(parents=True, exist_ok=True)
             session = core.make_session()
-            core.load_cookies(session, cookie)
+            if source in ('Chrome', 'Edge'):
+                self.events.put(('log', f'Đang đọc cookie Bilibili.tv từ {source} trên máy này...'))
+                count = core.load_browser_cookies(session, source.lower())
+                self.events.put(('log', f'Đã nạp {count} cookie Bilibili.tv (không hiển thị giá trị).'))
+            elif source == 'File TXT':
+                core.load_cookies(session, cookie)
             for i, (url, name) in enumerate(jobs, 1):
                 if self.stop_flag.is_set():
                     break
@@ -171,7 +183,7 @@ class GUI(tk.Tk):
                     stats['fail'] += 1
                     self.events.put(('log', f'  LỖI: {e}'))
                 self.events.put(('progress', 100 * i / len(jobs)))
-        except (ValueError, OSError, http.cookiejar.LoadError) as e:
+        except (ValueError, RuntimeError, OSError, http.cookiejar.LoadError) as e:
             self.events.put(('log', f'Lỗi khởi tạo: {e}'))
         finally:
             self.events.put(('done', f'Hoàn tất: {stats["ok"]} thành công, {stats["skip"]} bỏ qua, {stats["fail"]} lỗi.' + (' Đã dừng sớm.' if self.stop_flag.is_set() else '')))
