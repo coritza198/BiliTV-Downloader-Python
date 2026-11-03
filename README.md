@@ -80,7 +80,7 @@ Build GUI EXE on Windows by double-clicking `build_gui_exe.bat`; output is `dist
 GUI naming now has two separate fields: **Tên file (tiền tố)** and **Số bắt đầu**. For example `tập_` and `22` produce `tập_22.mp4`, `tập_23.mp4`, `tập_24.mp4` for the first three links. A zero-padded start number such as `0022` preserves padding. Explicit `URL | Custom Name` overrides generated names. Duplicate output names are rejected before downloading. The GUI displays a live filename preview.
 
 
-## Cookie trực tiếp từ Chrome / Edge (GUI v1.3.0)
+## Cookie trực tiếp từ Chrome / Edge (GUI v1.3.1)
 
 1. Đăng nhập `https://www.bilibili.tv/` bằng Chrome hoặc Edge trên chính máy Windows đang chạy tool.
 2. Mở GUI và chọn **Nguồn cookie → Chrome** hoặc **Edge**. Không cần xuất `cookies.txt`.
