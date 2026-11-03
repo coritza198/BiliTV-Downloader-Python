@@ -1,0 +1,35 @@
+name: Windows EXE
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: python -m pip install -r requirements-build.txt
+      - name: Test
+        run: python -m unittest discover -s tests -v
+      - name: Build
+        run: python -m PyInstaller --onefile --console --name BiliTV-Downloader bilitv_downloader.py
+      - name: Build GUI
+        run: python -m PyInstaller --onefile --windowed --name BiliTV-Downloader-GUI bilitv_gui.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BiliTV-Downloader-Windows
+          path: |
+            dist/BiliTV-Downloader.exe
+            dist/BiliTV-Downloader-GUI.exe
+      - name: Publish release asset
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: gh release create "${{ github.ref_name }}" dist/BiliTV-Downloader.exe dist/BiliTV-Downloader-GUI.exe --generate-notes

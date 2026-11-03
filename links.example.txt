@@ -1,0 +1,3 @@
+# One HTTPS Bili.tv URL per line
+https://www.bilibili.tv/video/1234567890
+https://www.bilibili.tv/play/12345/67890
